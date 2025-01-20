@@ -6,10 +6,19 @@ use std::f32::consts::PI;
 use bevy::{input::keyboard, prelude::*};
 use std::{f32::consts::FRAC_PI_2, ops::Range};
 
+mod grid;
+
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .init_resource::<CameraSettings>()
+        .add_plugins((
+            DefaultPlugins,
+            grid::GridPlugin {
+                size_x: 100.,
+                size_y: 1000.,
+                interval_x: 10.,
+                interval_y: 10.,
+            },
+        ))
         .insert_resource(PositionLoggingTimer(Timer::from_seconds(
             0.1,
             TimerMode::Repeating,
@@ -19,60 +28,18 @@ fn main() {
         .run();
 }
 
-#[derive(Debug, Resource)]
-struct CameraSettings {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-impl Default for CameraSettings {
-    fn default() -> Self {
-        Self {
-            x: 1.,
-            y: 1.,
-            z: 1.,
-        }
-    }
-}
-
 #[derive(Component)]
 struct PositionText;
 
-const GRID_SIZE_X: f32 = 1000.;
-const GRID_SIZE_Y: f32 = 1000.;
-const GRID_INTERVAL_X: f32 = 10.0;
-const GRID_INTERVAL_Y: f32 = 10.0;
 const PITCH_LIMIT: f32 = FRAC_PI_2 - 0.01;
 const PITCH_RANGE: Range<f32> = -PITCH_LIMIT..PITCH_LIMIT;
+
 /// set up a simple 3D scene
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // X-axis grid lines
-    for i in ((-1. * GRID_SIZE_X / 2.) as i32..=(GRID_SIZE_X / 2.) as i32)
-        .step_by(GRID_INTERVAL_X as usize)
-    {
-        // Map grid line index to x_position. index_0=-GRID_SIZE_X / 2, index_max=GRID_SIZE_X / 2 - GRID_INTERVAL_X
-        commands.spawn((
-            Mesh3d(meshes.add(Rectangle::new(1., GRID_SIZE_Y + 1.))),
-            MeshMaterial3d(materials.add(Color::BLACK)),
-            Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
-                .with_translation(Vec3::from_array([i as f32, 0., 0.])),
-        ));
-    }
-    for j in ((-1. * GRID_SIZE_Y / 2.) as i32..=(GRID_SIZE_Y / 2.) as i32)
-        .step_by(GRID_INTERVAL_Y as usize)
-    {
-        commands.spawn((
-            Mesh3d(meshes.add(Rectangle::new(GRID_SIZE_X + 1., 1.))),
-            MeshMaterial3d(materials.add(Color::BLACK)),
-            Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
-                .with_translation(Vec3::from_array([0., 0., j as f32])),
-        ));
-    }
-
     // cube
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(1.0, 20.0, 1.0))),
@@ -117,9 +84,9 @@ fn position_logging_system(
 
 fn keyboard_input_system(
     mut camera: Single<&mut Transform, With<Camera>>,
-    // camera_settings: Res<CameraSettings>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
+    grid: Res<grid::Grid>,
 ) {
     let (yaw, pitch, roll) = camera.rotation.to_euler(EulerRot::YXZ);
     let mut delta_pitch = 0.;
@@ -167,7 +134,7 @@ fn keyboard_input_system(
     }
     camera.translation = (camera.translation + horizontal_translation + verticle_translation)
         .clamp(
-            Vec3::from_array([-GRID_SIZE_X / 2., 20., -GRID_SIZE_Y / 2.]),
-            Vec3::from_array([GRID_SIZE_X / 2., 20., GRID_SIZE_Y / 2.]),
+            Vec3::from_array([-grid.size_x / 2., 20., -grid.size_y / 2.]),
+            Vec3::from_array([grid.size_x / 2., 20., grid.size_y / 2.]),
         );
 }
