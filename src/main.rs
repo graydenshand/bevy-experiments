@@ -3,7 +3,7 @@
 use core::f32;
 use std::f32::consts::PI;
 
-use bevy::{input::keyboard, prelude::*};
+use bevy::{color::palettes::css::BLUE, input::keyboard, prelude::*};
 use std::{f32::consts::FRAC_PI_2, ops::Range};
 
 mod grid;
@@ -23,6 +23,7 @@ fn main() {
             0.1,
             TimerMode::Repeating,
         )))
+        .insert_resource(RectangleColor { handle: None })
         .add_systems(Startup, setup)
         .add_systems(Update, (keyboard_input_system, position_logging_system))
         .run();
@@ -31,21 +32,41 @@ fn main() {
 #[derive(Component)]
 struct PositionText;
 
+#[derive(Component)]
+struct BlueRectangle;
+
+#[derive(Resource)]
+struct RectangleColor {
+    handle: Option<Handle<StandardMaterial>>,
+}
+
 const PITCH_LIMIT: f32 = FRAC_PI_2 - 0.01;
 const PITCH_RANGE: Range<f32> = -PITCH_LIMIT..PITCH_LIMIT;
+const BLUE_RECT_POSITION: Vec3 = Vec3::from_array([0., 10., 0.]);
+const ACTION_RADIUS: f32 = 30.;
 
 /// set up a simple 3D scene
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut rect_color: ResMut<RectangleColor>,
 ) {
     // cube
+    let rect_color_handle = materials.add(Color::srgb_u8(0, 0, 255));
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(1.0, 20.0, 1.0))),
-        MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
-        Transform::from_xyz(0.0, 10., 0.0),
+        MeshMaterial3d(rect_color_handle.clone()),
+        Transform::from_xyz(
+            BLUE_RECT_POSITION.x,
+            BLUE_RECT_POSITION.y,
+            BLUE_RECT_POSITION.z,
+        ),
+        BlueRectangle,
     ));
+
+    rect_color.handle = Some(rect_color_handle);
+
     // light
     commands.spawn((
         PointLight {
@@ -87,20 +108,22 @@ fn keyboard_input_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
     grid: Res<grid::Grid>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    rect_color: ResMut<RectangleColor>,
 ) {
     let (yaw, pitch, roll) = camera.rotation.to_euler(EulerRot::YXZ);
     let mut delta_pitch = 0.;
     let mut delta_yaw = 0.;
-    if keyboard_input.pressed(KeyCode::KeyL) {
+    if keyboard_input.pressed(KeyCode::ArrowRight) {
         delta_yaw = -1.;
     }
-    if keyboard_input.pressed(KeyCode::KeyJ) {
+    if keyboard_input.pressed(KeyCode::ArrowLeft) {
         delta_yaw = 1.;
     }
-    if keyboard_input.pressed(KeyCode::KeyI) {
+    if keyboard_input.pressed(KeyCode::ArrowUp) {
         delta_pitch = 1.;
     }
-    if keyboard_input.pressed(KeyCode::KeyK) {
+    if keyboard_input.pressed(KeyCode::ArrowDown) {
         delta_pitch = -1.;
     }
     // Establish the new yaw and pitch, preventing the pitch value from exceeding our limits.
@@ -137,4 +160,14 @@ fn keyboard_input_system(
             Vec3::from_array([-grid.size_x / 2., 20., -grid.size_y / 2.]),
             Vec3::from_array([grid.size_x / 2., 20., grid.size_y / 2.]),
         );
+
+    if let Some(handle) = &rect_color.handle {
+        if let Some(mat) = materials.get_mut(handle) {
+            if camera.translation.distance(BLUE_RECT_POSITION) < ACTION_RADIUS {
+                mat.base_color = Color::srgb_u8(255, 0, 0);
+            } else {
+                mat.base_color = Color::srgb_u8(0, 0, 255);
+            }
+        };
+    }
 }
